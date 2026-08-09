@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"service-monitor/internal/config"
 	"service-monitor/internal/database"
+	"service-monitor/internal/handler"
 	"service-monitor/internal/health"
+	"service-monitor/internal/repository"
+	"service-monitor/internal/service"
 	"time"
 )
 
@@ -27,12 +30,20 @@ func main() {
 	defer db.Close()
 	fmt.Println("Connected to PostgreSQL!")
 
-	startServer(cfg)
+	serviceRepo := repository.NewPostgresServiceRepository(db)
+
+	serviceManager := service.NewService(serviceRepo)
+
+	serviceHandler := handler.NewServiceHandler(serviceManager)
+
+	startServer(cfg, serviceHandler)
 }
 
-func startServer(cfg config.Config) {
+func startServer(cfg config.Config, serviceHandler *handler.ServiceHandler) {
 
 	mux := http.NewServeMux()
+
+	mux.HandleFunc("/services", serviceHandler.RegisterService)
 
 	s := &http.Server{
 		Addr:         cfg.ServerAddr,
