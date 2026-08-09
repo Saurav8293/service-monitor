@@ -1,6 +1,7 @@
 package health
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"service-monitor/internal/config"
@@ -15,11 +16,16 @@ const (
 	StateDown    ServiceState = "down"
 )
 
-func ServiceMonitor(cfg config.Config, services []model.RegisteredService) {
+type ServiceRepository interface {
+	GetAll(ctx context.Context) ([]model.RegisteredService, error)
+}
+
+func ServiceMonitor(cfg config.Config, repo ServiceRepository) {
 
 	client := &http.Client{
 		Timeout: cfg.RequestTimeout,
 	}
+	ctx := context.Background()
 
 	previousStates := make(map[int64]ServiceState)
 
@@ -27,6 +33,13 @@ func ServiceMonitor(cfg config.Config, services []model.RegisteredService) {
 	defer ticker.Stop()
 
 	for {
+		services, err := repo.GetAll(ctx)
+		if err != nil {
+			fmt.Println("failed to load services:", err)
+			<-ticker.C
+			continue
+		}
+
 		for _, service := range services {
 			currentState := checkHealth(client, service)
 			previousState := previousStates[service.ID]
@@ -51,7 +64,7 @@ func checkHealth(client *http.Client, service model.RegisteredService) ServiceSt
 	resp, err := client.Get(service.Endpoint)
 
 	if err != nil {
-		fmt.Println("Payment service has problem:", err)
+		fmt.Printf("%s health check failed: %v\n", service.Name, err)
 		return StateDown
 	}
 
