@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"service-monitor/internal/config"
+	"service-monitor/internal/database"
 	"service-monitor/internal/health"
 	"time"
 )
@@ -15,6 +17,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	ctx := context.Background()
+
+	db, err := database.NewPostgresPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	fmt.Println("Connected to PostgreSQL!")
 
 	startServer(cfg)
 }
