@@ -8,7 +8,6 @@ import (
 
 type Config struct {
 	ServerAddr          string
-	HealthURL           string
 	HealthCheckInterval time.Duration
 	RequestTimeout      time.Duration
 	DatabaseURL         string
@@ -16,7 +15,6 @@ type Config struct {
 
 func Load() (Config, error) {
 	serverAddr := os.Getenv("SERVER_ADDR")
-	healthURL := os.Getenv("HEALTH_URL")
 	healthCheckInterval := os.Getenv("HEALTH_CHECK_INTERVAL")
 	requestTimeout := os.Getenv("HEALTH_REQUEST_TIMEOUT")
 	databaseURL := os.Getenv("DATABASE_URL")
@@ -27,10 +25,6 @@ func Load() (Config, error) {
 
 	if serverAddr == "" {
 		return Config{}, fmt.Errorf("SERVER_ADDR is required")
-	}
-
-	if healthURL == "" {
-		return Config{}, fmt.Errorf("HEALTH_URL is required")
 	}
 
 	interval, err := time.ParseDuration(healthCheckInterval)
@@ -45,7 +39,6 @@ func Load() (Config, error) {
 
 	return Config{
 		ServerAddr:          serverAddr,
-		HealthURL:           healthURL,
 		HealthCheckInterval: interval,
 		RequestTimeout:      timeout,
 		DatabaseURL:         databaseURL,

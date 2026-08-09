@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"service-monitor/internal/model"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -36,4 +37,45 @@ func (r *PostgresServiceRepository) Create(ctx context.Context, name string, end
 		return 0, err
 	}
 	return id, nil
+}
+
+func (r *PostgresServiceRepository) GetAll(ctx context.Context) ([]model.RegisteredService, error) {
+	query := `
+		SELECT * FROM services
+	`
+
+	rows, err := r.db.Query(
+		ctx,
+		query,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var services []model.RegisteredService
+
+	for rows.Next() {
+		var service model.RegisteredService
+
+		err := rows.Scan(
+			&service.ID,
+			&service.Name,
+			&service.Endpoint,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		services = append(services, service)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return services, nil
 }

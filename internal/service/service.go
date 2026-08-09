@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"service-monitor/internal/model"
 	"strings"
 )
 
 type ServiceRepository interface {
 	Create(ctx context.Context, name string, endpoint string) (int64, error)
+	GetAll(ctx context.Context) ([]model.RegisteredService, error)
 }
 
 type Service struct {
@@ -34,4 +36,8 @@ func (s *Service) RegisterService(ctx context.Context, name string, endpoint str
 	}
 	return s.repo.Create(ctx, name, endpoint)
 
+}
+
+func (s *Service) GetAllServices(ctx context.Context) ([]model.RegisteredService, error) {
+	return s.repo.GetAll(ctx)
 }

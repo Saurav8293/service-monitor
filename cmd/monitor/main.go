@@ -9,6 +9,7 @@ import (
 	"service-monitor/internal/database"
 	"service-monitor/internal/handler"
 	"service-monitor/internal/health"
+	"service-monitor/internal/model"
 	"service-monitor/internal/repository"
 	"service-monitor/internal/service"
 	"time"
@@ -34,12 +35,19 @@ func main() {
 
 	serviceManager := service.NewService(serviceRepo)
 
+	services, err := serviceManager.GetAllServices(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Registered services:", len(services))
+
 	serviceHandler := handler.NewServiceHandler(serviceManager)
 
-	startServer(cfg, serviceHandler)
+	startServer(cfg, serviceHandler, services)
 }
 
-func startServer(cfg config.Config, serviceHandler *handler.ServiceHandler) {
+func startServer(cfg config.Config, serviceHandler *handler.ServiceHandler, services []model.RegisteredService) {
 
 	mux := http.NewServeMux()
 
@@ -54,7 +62,7 @@ func startServer(cfg config.Config, serviceHandler *handler.ServiceHandler) {
 
 	fmt.Println("HTTP server is running at", cfg.ServerAddr)
 
-	go health.ServiceMonitor(cfg)
+	go health.ServiceMonitor(cfg, services)
 
 	log.Fatal(s.ListenAndServe())
 }
