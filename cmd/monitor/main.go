@@ -23,8 +23,6 @@ func startServer(cfg config.Config) {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/health", healthCheckHandler)
-
 	s := &http.Server{
 		Addr:         cfg.ServerAddr,
 		Handler:      mux,
@@ -37,9 +35,4 @@ func startServer(cfg config.Config) {
 	go health.ServiceMonitor(cfg)
 
 	log.Fatal(s.ListenAndServe())
-}
-
-func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "OK")
 }
