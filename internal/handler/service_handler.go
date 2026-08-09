@@ -47,3 +47,19 @@ func (h *ServiceHandler) RegisterService(w http.ResponseWriter, r *http.Request)
 	})
 
 }
+
+func (h *ServiceHandler) GetServices(w http.ResponseWriter, r *http.Request) {
+	services, err := h.service.GetAllServices(r.Context())
+	if err != nil {
+		http.Error(w, "failed to get services", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(services); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
+
+}

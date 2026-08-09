@@ -52,6 +52,7 @@ func startServer(cfg config.Config, serviceHandler *handler.ServiceHandler, serv
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/services", serviceHandler.RegisterService)
+	mux.HandleFunc("/services/list", serviceHandler.GetServices)
 
 	s := &http.Server{
 		Addr:         cfg.ServerAddr,
