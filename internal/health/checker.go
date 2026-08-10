@@ -42,15 +42,17 @@ func ServiceMonitor(cfg config.Config, repo ServiceRepository) {
 
 		for _, service := range services {
 			currentState := checkHealth(client, service)
-			previousState := previousStates[service.ID]
+			previousState, exists := previousStates[service.ID]
 
-			if previousState != "" && previousState != currentState {
+			if exists {
 				if previousState == StateHealthy && currentState == StateDown {
-					fmt.Printf("%s is DOWN\n", service.Name)
+					fmt.Printf("[ALERT] %s is DOWN\n", service.Name)
+				} else if previousState == StateDown && currentState == StateHealthy {
+					fmt.Printf("[INFO] %s RECOVERED\n", service.Name)
 				}
-
-				if previousState == StateDown && currentState == StateHealthy {
-					fmt.Printf("%s RECOVERED\n", service.Name)
+			} else {
+				if currentState == StateDown {
+					fmt.Printf("[ALERT] %s is DOWN (initial check)\n", service.Name)
 				}
 			}
 			previousStates[service.ID] = currentState

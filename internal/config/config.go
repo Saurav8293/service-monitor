@@ -1,8 +1,10 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -13,7 +15,33 @@ type Config struct {
 	DatabaseURL         string
 }
 
+func loadEnv(filename string) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			if os.Getenv(key) == "" {
+				os.Setenv(key, val)
+			}
+		}
+	}
+}
+
 func Load() (Config, error) {
+	loadEnv(".env")
+
 	serverAddr := os.Getenv("SERVER_ADDR")
 	healthCheckInterval := os.Getenv("HEALTH_CHECK_INTERVAL")
 	requestTimeout := os.Getenv("HEALTH_REQUEST_TIMEOUT")

@@ -41,7 +41,7 @@ func (r *PostgresServiceRepository) Create(ctx context.Context, name string, end
 
 func (r *PostgresServiceRepository) GetAll(ctx context.Context) ([]model.RegisteredService, error) {
 	query := `
-		SELECT * FROM services
+		SELECT id, name, endpoint FROM services
 	`
 
 	rows, err := r.db.Query(

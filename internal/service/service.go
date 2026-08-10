@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"service-monitor/internal/model"
 	"strings"
 )
@@ -34,6 +35,12 @@ func (s *Service) RegisterService(ctx context.Context, name string, endpoint str
 	if endpoint == "" {
 		return 0, fmt.Errorf("service endpoint is required")
 	}
+
+	u, err := url.ParseRequestURI(endpoint)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return 0, fmt.Errorf("invalid endpoint URL: must be a valid URL with scheme (e.g. http:// or https://)")
+	}
+
 	return s.repo.Create(ctx, name, endpoint)
 
 }
@@ -41,3 +48,4 @@ func (s *Service) RegisterService(ctx context.Context, name string, endpoint str
 func (s *Service) GetAllServices(ctx context.Context) ([]model.RegisteredService, error) {
 	return s.repo.GetAll(ctx)
 }
+
