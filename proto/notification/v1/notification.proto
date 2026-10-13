@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package notification.v1;
+
+option go_package = "service-monitor/pkg/proto/notification/v1;notificationv1";
+
+service NotificationService {
+    rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+}
+
+message SendNotificationRequest {
+    int64  incident_id  = 1;
+    string service_name = 2;
+    string event_type   = 3;
+    string message      = 4;
+}
+
+message SendNotificationResponse {
+    bool   success         = 1;
+    string notification_id = 2;
+    string timestamp       = 3;
+}

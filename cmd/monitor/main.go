@@ -2,60 +2,113 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"errors"
+	"log/slog"
 	"net/http"
-	"service-monitor/internal/config"
-	"service-monitor/internal/database"
-	"service-monitor/internal/handler"
-	"service-monitor/internal/health"
-	"service-monitor/internal/repository"
-	"service-monitor/internal/service"
+	"os"
+	"os/signal"
+	"service-monitor/internal/monitor/auth"
+	"service-monitor/internal/monitor/config"
+	"service-monitor/internal/monitor/handler"
+	"service-monitor/internal/monitor/health"
+	"service-monitor/internal/monitor/repository"
+	"service-monitor/internal/monitor/service"
+	"service-monitor/pkg/database"
+	"service-monitor/pkg/kafka"
+	"service-monitor/pkg/logging"
+	"service-monitor/pkg/metrics"
+	"syscall"
 	"time"
 )
 
 func main() {
-
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to load configuration", "error", err)
+		os.Exit(1)
 	}
 
-	ctx := context.Background()
+	logger := logging.InitLogger(cfg.LogLevel, "text")
+	logger.Info("starting Monitor Service", "addr", cfg.ServerAddr)
 
-	db, err := database.NewPostgresPool(ctx, cfg.DatabaseURL)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// 1. Database Connection & Migrations
+	dbPool, err := database.NewPostgresPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("failed to connect to postgres", "error", err)
+		os.Exit(1)
 	}
-	defer db.Close()
-	fmt.Println("Connected to PostgreSQL!")
+	defer dbPool.Close()
 
-	serviceRepo := repository.NewPostgresServiceRepository(db)
+	if err := database.RunMigrations(ctx, dbPool); err != nil {
+		logger.Error("failed to run database migrations", "error", err)
+		os.Exit(1)
+	}
 
-	serviceManager := service.NewService(serviceRepo)
+	// 2. Kafka Producer
+	kafkaProducer := kafka.NewProducer(cfg.KafkaBroker, cfg.KafkaTopic)
+	defer kafkaProducer.Close()
 
-	serviceHandler := handler.NewServiceHandler(serviceManager)
+	// 3. Repository, Auth, Service, Handler
+	repo := repository.NewPostgresServiceRepository(dbPool)
+	tokenMgr := auth.NewTokenManager(cfg.JWTSecret)
+	svc := service.NewService(repo, tokenMgr)
+	h := handler.NewHandler(svc)
 
-	startServer(cfg, serviceHandler, serviceRepo)
-}
+	// 4. Worker Pool Health Checker
+	healthChecker := health.NewHealthChecker(cfg, repo, kafkaProducer)
+	go healthChecker.Start(ctx)
 
-func startServer(cfg config.Config, serviceHandler *handler.ServiceHandler, serviceRepo *repository.PostgresServiceRepository) {
-
+	// 5. HTTP Router
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/auth/login", h.Login)
+	mux.HandleFunc("GET /api/v1/auth/validate", h.ValidateToken)
+	mux.HandleFunc("POST /api/v1/services", h.RegisterService)
+	mux.HandleFunc("GET /api/v1/services", h.GetServices)
+	mux.HandleFunc("GET /health", h.Health)
+	mux.Handle("GET /metrics", metrics.Handler())
 
-	mux.HandleFunc("POST /services", serviceHandler.RegisterService)
-	mux.HandleFunc("GET /services/list", serviceHandler.GetServices)
+	// Backward compatibility routes for legacy endpoints
+	mux.HandleFunc("POST /services", h.RegisterService)
+	mux.HandleFunc("GET /services/list", h.GetServices)
 
-	s := &http.Server{
+	instrumentedMux := metrics.Middleware("monitor-service", mux)
+
+	server := &http.Server{
 		Addr:         cfg.ServerAddr,
-		Handler:      mux,
+		Handler:      instrumentedMux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
-	fmt.Println("HTTP server is running at", cfg.ServerAddr)
+	// Start HTTP server
+	serverErrChan := make(chan error, 1)
+	go func() {
+		logger.Info("HTTP server listening", "addr", cfg.ServerAddr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrChan <- err
+		}
+	}()
 
-	go health.ServiceMonitor(cfg, serviceRepo)
+	// Wait for shutdown signal or fatal server error
+	select {
+	case <-ctx.Done():
+		logger.Info("received termination signal, initiating graceful shutdown...")
+	case err := <-serverErrChan:
+		logger.Error("server encountered fatal error", "error", err)
+	}
 
-	log.Fatal(s.ListenAndServe())
+	// Graceful shutdown with 5-second timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Error("failed to gracefully shutdown HTTP server", "error", err)
+	} else {
+		logger.Info("HTTP server cleanly stopped")
+	}
+
+	logger.Info("Monitor Service shutdown complete")
 }

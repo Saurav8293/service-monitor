@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'monitor-service'
+    static_configs:
+      - targets: ['monitor-service:8080']
+
+  - job_name: 'incident-service'
+    static_configs:
+      - targets: ['incident-service:8083']
+
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:8084']
