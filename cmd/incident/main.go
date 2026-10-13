@@ -27,7 +27,6 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// 1. Database connection & migrations
 	dbPool, err := database.NewPostgresPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("failed to connect to postgres", "error", err)
@@ -40,7 +39,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 2. gRPC Client to Notification Service
 	notifClient, err := client.NewNotificationClient(cfg.NotificationURL)
 	if err != nil {
 		logger.Warn("could not connect to Notification gRPC service immediately; will retry during calls", "error", err)
@@ -48,11 +46,9 @@ func main() {
 		defer notifClient.Close()
 	}
 
-	// 3. Repository and Service
 	repo := repository.NewPostgresIncidentRepository(dbPool)
 	incidentSvc := service.NewIncidentService(repo, notifClient)
 
-	// 4. Kafka Consumer
 	kafkaConsumer := kafka.NewConsumer(cfg.KafkaBroker, cfg.KafkaTopic, cfg.KafkaGroupID)
 	defer kafkaConsumer.Close()
 

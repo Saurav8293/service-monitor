@@ -29,7 +29,6 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// 1. Database Connection & Migrations
 	dbPool, err := database.NewPostgresPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("failed to connect to postgres", "error", err)
@@ -42,12 +41,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 2. Repository, Service, and gRPC Handler
 	repo := repository.NewPostgresNotificationRepository(dbPool)
 	notifSvc := service.NewNotificationService(repo)
 	grpcHandler := handler.NewGRPCHandler(notifSvc)
 
-	// 3. gRPC Server
 	lis, err := net.Listen("tcp", cfg.GRPCPort)
 	if err != nil {
 		logger.Error("failed to listen on gRPC port", "port", cfg.GRPCPort, "error", err)

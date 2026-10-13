@@ -34,7 +34,6 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// 1. Database Connection & Migrations
 	dbPool, err := database.NewPostgresPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("failed to connect to postgres", "error", err)
@@ -47,21 +46,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 2. Kafka Producer
 	kafkaProducer := kafka.NewProducer(cfg.KafkaBroker, cfg.KafkaTopic)
 	defer kafkaProducer.Close()
 
-	// 3. Repository, Auth, Service, Handler
 	repo := repository.NewPostgresServiceRepository(dbPool)
 	tokenMgr := auth.NewTokenManager(cfg.JWTSecret)
 	svc := service.NewService(repo, tokenMgr)
 	h := handler.NewHandler(svc)
 
-	// 4. Worker Pool Health Checker
 	healthChecker := health.NewHealthChecker(cfg, repo, kafkaProducer)
 	go healthChecker.Start(ctx)
 
-	// 5. HTTP Router
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/auth/login", h.Login)
 	mux.HandleFunc("GET /api/v1/auth/validate", h.ValidateToken)
